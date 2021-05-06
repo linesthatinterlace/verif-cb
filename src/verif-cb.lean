@@ -266,158 +266,156 @@ section part_three
 
 variables {b : ℕ}
 
-  -- We define xor in a simple, boring way.
+  -- "Even numbers aren't odd."
 
-def xor_one (b : ℕ) (x : fin (2*b + 2)) : fin (2*b + 2) :=
-  ite (even x.val) (x + 1) (x - 1)
+lemma two_mul_neq_two_mul_add_one (m : ℕ) (n : ℕ) : 2*m ≠ 2*n + 1 :=
+begin
+  rw two_mul, rw two_mul,
+  rw ← bit0, rw ← bit0, rw ← bit1,
+  exact nat.bit0_ne_bit1 _ _,
+end
+
+lemma nat.bit0_div2_id (m : ℕ) : 2*m/2 = m :=
+  mul_div_right _ (zero_lt_two)
+
+lemma nat.bit1_div2_id (m : ℕ) : (2*m + 1)/2 = m :=
+begin
+  rw [nat.add_div_of_dvd_right (dvd_mul_right 2 _),
+  nat.div_eq_of_lt (one_lt_two), add_zero, nat.bit0_div2_id],
+end
+
+  -- We define xor in a simple, boring way.
 
   /-
     To avoid confusions with coercion and overloading, we define mul, mod and
     div ops in a special way between specific types.
   -/
 
-def fin.div_two  (x : fin (2*b + 2)) :  fin (b + 1) :=
+lemma fin.div2_lt_b {x : fin (2*b)} : (x : ℕ)/2 < b :=
+  nat.div_lt_of_lt_mul x.property
+
+def fin.div2 (x : fin (2*b)) : fin b := 
+  ⟨(x : ℕ)/2, fin.div2_lt_b⟩
+
+lemma fin.div2_def (x : fin (2*b)) : x.div2.val = x.val/2 := rfl
+
+lemma fin.bit0_lt_2b {y : fin b} : 2*(y : ℕ) < 2*b :=
+  nat.mul_lt_mul' (le_refl _) y.property (zero_lt_two)
+
+def fin.bit0 (y : fin b) : fin (2*b) :=
+  ⟨2*(y : ℕ), fin.bit0_lt_2b⟩
+
+lemma fin.bit0_def (y : fin b) : y.bit0.val = 2*y.val := rfl
+
+lemma fin.bit1_lt_2b {y : fin b} : 2*(y : ℕ) + 1 < 2*b :=
 begin
-  refine ⟨x/2, _⟩,
-  rw [nat.div_lt_iff_lt_mul _ _ (zero_lt_two), nat.mul_comm _ 2,
-  mul_add, mul_one, ← fin.val_eq_coe],
-  exact x.property,
-end
-
-def fin.mul_two (y : fin (b + 1)) : fin (2*b + 2) :=
-begin
-  refine ⟨2*y, _⟩,
-  rw ← nat.mul_succ,
-  exact nat.mul_lt_mul' (le_refl _) y.property (zero_lt_two),
-end
-
-def fin.mod_two {n : ℕ} (z : fin n) : fin 2 :=
-begin
-  refine ⟨z % 2, _⟩,
-  exact nat.mod_lt _ (zero_lt_two),
-end 
-
-  -- "Even numbers aren't odd."
-
-lemma two_mul_neq_two_mul_add_one (m : ℕ) (n : ℕ) : 2*m ≠ 2*n + 1 :=
-begin
-  intro contra,
-  have h_e : even (2*m), use m,
-  have h_o : odd (2*m), rw contra, use n,
-  rw odd_iff_not_even at h_o, contradiction,
-end
-
-  /-
-    The following pair of lemmas are incredibly ugly, but they are constantly
-    useful when proving these utility proofs.
-  -/
-
-lemma fiddly_even_mod {b : ℕ} {x : fin (2*b + 2)} (h : even x.val)
-  : (x.val + 1) % (2 * b + 2) = x.val + 1 := 
-begin
-  rcases h with ⟨k, hk⟩, rw hk,
-  cases le_iff_eq_or_lt.mp (nat.succ_le_iff.mpr x.property),
+  cases lt_or_eq_of_le (succ_le_of_lt (nat.mul_lt_mul' (le_refl _)
+    y.property (zero_lt_two))) with h,
+  { exact h },
   { exfalso,
-    apply two_mul_neq_two_mul_add_one b.succ k,
-    rw [← hk, add_one, h, mul_succ],
-  },
-  { rw [← hk, add_one, nat.mod_eq_of_lt h] }
-end
-
-lemma fiddly_odd_mod {b : ℕ} {x : fin (2*b + 2)} (h : ¬even x.val)
-  : (x.val + (2 * b + 2 - 1)) % (2 * b + 2) = x.val - 1 :=
-begin
-  rw ← odd_iff_not_even at h,
-  rcases h with ⟨k, hk⟩,
-  rw [hk, add_succ_sub_one, add_assoc,  ← add_assoc 1,  add_comm 1, add_assoc,
-  nat.add_mod_right, nat.mod_eq_of_lt, add_succ_sub_one, add_zero],
-  refine lt_of_le_of_lt _ x.property,
-  rw hk, exact le_succ _
-end
-
-  /-
-    It's useful to think of the control bits as numbers in fin 2, which is to
-    say, naturals mod 2. We could use bools, but it makes some calculation later
-    more fiddly. Not sure which is better!
-  -/
-
-lemma fin_two_not_one_iff_zero : ∀ y : fin 2, ¬ y = 1 ↔ y = 0 :=
-begin
-  intro y, split; intro hy,
-  { rw fin.eq_iff_veq at hy ⊢, rw fin.val_one at hy, rw fin.val_zero,
-    exact le_antisymm (le_of_succ_le_succ
-    (lt_of_le_of_ne (le_of_succ_le_succ y.property) hy)) (nat.zero_le _),
-  },
-  { rw hy, exact fin.zero_ne_one }
-end
-
-  -- An obvious fact : 2*x = 0 mod 2.
-
-lemma mul_two_mod_two_eq_zero (y : fin (b + 1)) : y.mul_two.mod_two = 0 :=
-begin
-  unfold fin.mul_two fin.mod_two, rw ← fin.mk_zero,
-  rw subtype.mk_eq_mk, rw fin.coe_mk, rw nat.mul_mod_right,
-end
-
-  -- If x is even, its xor is not.
-
-lemma val_even_iff_val_xor_one_odd (x : fin (2*b + 2))
-  : (even x.val) ↔ ¬(even (xor_one b x).val) :=
-begin
-  split; intro h,
-  { unfold xor_one,
-    rw if_pos h,
-    rw ← odd_iff_not_even,
-    rcases (id h) with ⟨k, hk⟩,
-    use k,
-    rw [fin.add_def, fin.val_one, fiddly_even_mod h, hk],
-  },
-  { unfold xor_one at h,
-    rcases even_or_odd (x.val) with h' | h',
-    { exact h' },
-    { rw odd_iff_not_even at h',
-      rw if_neg h' at h,
-      rw ← odd_iff_not_even at h,
-      rcases h with ⟨k, hk⟩,
-      rw [fin.sub_def, fin.val_one, fiddly_odd_mod h'] at hk,
-      use k + 1,
-      rcases (nat.eq_zero_or_eq_succ_pred x.val) with xv_eq | xv_eq,
-      { exfalso,
-        apply nat.succ_ne_zero (2*k),
-        rw xv_eq at hk, rw nat.zero_sub at hk, rw add_one at hk,
-        rw hk,
-      },
-      { rw xv_eq, rw mul_add, rw mul_one, congr,
-        rwa nat.pred_eq_sub_one,
-      }
-    }
+    apply two_mul_neq_two_mul_add_one b y.val,
+    rw ← h
   }
 end
 
-  -- If x is odd, its xor by one is not.
+def fin.bit1 (y : fin b) : fin (2*b) :=
+  ⟨2*(y : ℕ) + 1, fin.bit1_lt_2b⟩
 
-lemma val_odd_iff_val_xor_one_even (x : fin (2*b + 2))
-  : (odd x.val) ↔ ¬(odd (xor_one b x).val) :=
+lemma fin.bit1_def (y : fin b)
+  : y.bit1.val = 2*y.val + 1 := rfl
+
+lemma fin.bit0_div2_id {y : fin b} : y.bit0.div2 = y :=
+  (by rw [fin.eq_iff_veq, fin.div2_def, fin.bit0_def,
+    nat.bit0_div2_id] )
+
+lemma fin.bit1_div2_id {y : fin b}
+  : y.bit1.div2 = y :=
 begin
-  split; intro h; rw odd_iff_not_even at h ⊢,
-  { rwa (not_iff_not).mpr (val_even_iff_val_xor_one_odd _) at h },
-  { rwa (not_iff_not).mpr (val_even_iff_val_xor_one_odd _) }
+  rw [fin.eq_iff_veq, fin.div2_def, fin.bit1_def,
+  nat.bit1_div2_id]
+end
+
+def fin.even (x : fin (2*b)) : Prop := x.div2.bit0 = x
+
+def fin.odd (x : fin (2*b)) : Prop := x.div2.bit1 = x
+
+lemma fin.bit0_even (y : fin b) : y.bit0.even :=
+begin
+  unfold fin.even,
+  rw fin.bit0_div2_id
+end
+
+lemma fin.bit1_odd (y : fin b) : y.bit1.odd :=
+begin
+  unfold fin.odd,
+  rw fin.bit1_div2_id,
+end
+
+lemma fin.even_iff_val_even (x : fin (2*b)) : x.even ↔ even x.val :=
+begin
+  split; intro h,
+  { use x.div2,
+    rw [fin.even, fin.eq_iff_veq, fin.bit0_def] at h,
+    rw [fin.coe_eq_val, ← h]
+  },
+  { rcases h with ⟨k, hk⟩,
+    rw [fin.even, fin.eq_iff_veq, fin.bit0_def, fin.div2_def,
+    hk, nat.bit0_div2_id],
+  }
+end
+
+lemma fin.odd_iff_val_odd (x : fin (2*b)) : x.odd ↔ odd x.val :=
+begin
+  split; intro h,
+  { use x.div2,
+    rwa [fin.odd, fin.eq_iff_veq, fin.bit1_def] at h,
+    rw [fin.coe_eq_val, ← h]
+  },
+  { rcases h with ⟨k, hk⟩,
+    rw [fin.odd, fin.eq_iff_veq, fin.bit1_def, fin.div2_def,
+    hk, nat.bit1_div2_id]
+  }
+end
+
+lemma fin.odd_iff_not_even {x : fin (2*b)} : x.odd ↔ ¬ x.even :=
+  (by rw [fin.even_iff_val_even, fin.odd_iff_val_odd, odd_iff_not_even] )
+
+lemma fin.even_iff_not_odd {x : fin (2*b)} : x.even ↔ ¬ x.odd :=
+  (by rw [fin.even_iff_val_even, fin.odd_iff_val_odd, even_iff_not_odd] )
+
+lemma fin.even_or_odd (x : fin (2*b)) : x.even ∨ x.odd :=
+ (by {rw [fin.even_iff_val_even, fin.odd_iff_val_odd], exact even_or_odd _} )
+
+@[instance]
+def fin.even.decidable_pred : decidable_pred (@fin.even b) :=
+  λ x, decidable_of_iff' _ (fin.even_iff_val_even _)
+
+@[instance]
+def fin.decidable_pred_odd : decidable_pred (@fin.odd b) :=
+  λ x, decidable_of_decidable_of_iff not.decidable fin.odd_iff_not_even.symm
+
+
+def fin.xor_one (x : fin (2*b)) : fin (2*b) :=
+  ite (x.even) (x.div2.bit1) (x.div2.bit0)
+
+lemma fin.bit0_xor_one_eq_bit1 (y : fin b)
+  : y.bit0.xor_one = y.bit1 :=
+begin
+  unfold fin.xor_one,
+  rw if_pos (fin.bit0_even _),
+  rw fin.bit0_div2_id
 end
 
   -- x is never its own xor by one.
 
-lemma ne_xor_one  (x : fin (2*b + 2)) : x ≠ (xor_one b) x :=
+lemma ne_xor_one (x : fin (2*b)) : x.xor_one ≠ x :=
 begin
-  intro contra,
-  rcases even_or_odd (x.val) with h | h,
-  { apply (val_even_iff_val_xor_one_odd _).mp h,
-    rw ← contra,
-    exact h,
+  unfold fin.xor_one,
+  split_ifs with h,
+  { rw fin.even_iff_not_odd at h,
+    exact h
   },
-  { apply (val_odd_iff_val_xor_one_even _).mp h,
-    rw ← contra,
-    exact h,
-  }
+  { exact h }
 end
 
   /-
@@ -425,23 +423,21 @@ end
     of our definition of xor.
   -/
 
-lemma xor_one_involutive (b : ℕ) : involutive (xor_one b) := 
+lemma xor_one_involutive : involutive (@fin.xor_one b) := 
 begin
   intros x,
   have prop := x.property,
-  rw xor_one, split_ifs,
-  { rcases even_or_odd (x.val) with h' | h',
-    { rw val_even_iff_val_xor_one_odd at h',
-      contradiction,
-    },
-    { rw [xor_one, if_neg (odd_iff_not_even.mp h'), sub_add_cancel] }
+  unfold fin.xor_one, split_ifs with h h' h',
+  { exfalso,
+    rw fin.even_iff_not_odd at h',
+    exact h' (fin.bit1_odd _),
   },
-  { rcases even_or_odd (x.val) with h' | h',
-    { rw [xor_one, if_pos h', add_sub_cancel] },
-    { rw val_odd_iff_val_xor_one_even at h',
-      rw odd_iff_not_even at h',
-      contradiction,
-    }
+  { rwa fin.bit1_div2_id },
+  { rw ← fin.odd_iff_not_even at h,
+    rwa fin.bit0_div2_id
+  },
+  { exfalso,
+    exact h' (fin.bit0_even _),
   }
 end
 
@@ -450,69 +446,62 @@ end
     which traps a number to the xor by one of another.
   -/
 
-lemma xor_one_trap (x : fin (2*b + 2)) (x' : fin (2*b + 2))
-  : (xor_one b x') < (xor_one b x) → x ≤ x' → x = (xor_one b x') :=
+lemma xor_one_trap (x : fin (2*b)) (x' : fin (2*b))
+  : x'.xor_one < x.xor_one → x ≤ x' → x = x'.xor_one :=
 begin
-  unfold xor_one, split_ifs with hy hx hx,
+  unfold fin.xor_one, split_ifs with hy hx hx,
   all_goals {intros h_lt h_le},
-  { rw [fin.lt_iff_coe_lt_coe, fin.coe_eq_val, fin.coe_eq_val, fin.add_def,
-    fin.add_def, fin.val_one, fiddly_even_mod hx, fiddly_even_mod hy] at h_lt,
+  { exfalso,
+    rw [fin.lt_iff_coe_lt_coe, fin.coe_eq_val, fin.coe_eq_val, 
+    fin.bit1_def, fin.bit1_def, fin.div2_def,
+    fin.div2_def, nat.succ_lt_succ_iff, lt_iff_not_ge, ge_iff_le] at h_lt,
     rw [fin.le_iff_coe_le_coe, fin.coe_eq_val, fin.coe_eq_val] at h_le,
-    exfalso,
-    exact not_le_of_lt (lt_of_succ_lt_succ h_lt) h_le
+    exact h_lt (mul_le_mul_left _ (nat.div_le_div_right h_le)),
   },
-  { rw [fin.lt_iff_coe_lt_coe, fin.coe_eq_val, fin.coe_eq_val, fin.add_def,
-    fin.sub_def, fin.val_one, fiddly_odd_mod hx, fiddly_even_mod hy] at h_lt,
+  { exfalso,
+    rw [fin.lt_iff_coe_lt_coe, fin.coe_eq_val, fin.coe_eq_val, 
+    fin.bit1_def, fin.bit0_def, fin.div2_def,
+    fin.div2_def, lt_iff_not_ge, ge_iff_le] at h_lt,
     rw [fin.le_iff_coe_le_coe, fin.coe_eq_val, fin.coe_eq_val] at h_le,
-    exfalso,
-    exact nat.not_succ_lt_self (lt_of_lt_of_le h_lt
-    (le_trans (nat.pred_le _) h_le))
+    exact h_lt (le_trans ((mul_le_mul_left _ (nat.div_le_div_right h_le)))
+      (nat.le_succ _))
   },
-  { rw [fin.eq_iff_veq, fin.sub_def, fin.val_one, fiddly_odd_mod hy],
-    rw [fin.lt_iff_coe_lt_coe, fin.coe_eq_val, fin.coe_eq_val, fin.add_def,
-    fin.sub_def, fin.val_one, fiddly_even_mod hx, fiddly_odd_mod hy] at h_lt,
+  { rw [fin.eq_iff_veq, fin.bit0_def, fin.div2_def],
+    rw [fin.lt_iff_coe_lt_coe, fin.coe_eq_val, fin.coe_eq_val, fin.bit0_def,
+    fin.bit1_def, fin.div2_def, fin.div2_def] at h_lt,
     rw [fin.le_iff_coe_le_coe, fin.coe_eq_val, fin.coe_eq_val] at h_le,
-    rw ← nat.odd_iff_not_even at hy,
+    rw fin.even_iff_val_even at hx,
+    rw [← fin.odd_iff_not_even, fin.odd_iff_val_odd] at hy,
     rcases hx with ⟨k, hk⟩,
     rcases hy with ⟨k', hk'⟩,
     rw [hk, hk'] at *,
-    rw nat.add_sub_cancel at h_lt ⊢,
     cases (le_iff_eq_or_lt.mp h_le),
     { exfalso,
       exact two_mul_neq_two_mul_add_one k k' h,
     },
-    { exact le_antisymm (nat.le_of_succ_le_succ h)
-    (nat.le_of_succ_le_succ h_lt) }
+    { rw [nat.bit1_div2_id, nat.bit0_div2_id] at h_lt, 
+      rw nat.bit1_div2_id,
+      exact le_antisymm (nat.le_of_succ_le_succ h)
+        (nat.le_of_succ_le_succ h_lt),
+    }
   },
-  { rw [fin.lt_iff_coe_lt_coe, fin.coe_eq_val, fin.coe_eq_val, fin.sub_def,
-    fin.sub_def, fin.val_one, fiddly_odd_mod hx, fiddly_odd_mod hy] at h_lt,
+  { exfalso,
+    rw [fin.lt_iff_coe_lt_coe, fin.coe_eq_val, fin.coe_eq_val, fin.bit0_def,
+    fin.bit0_def, fin.div2_def, fin.div2_def, lt_iff_not_ge,
+    ge_iff_le] at h_lt,
     rw [fin.le_iff_coe_le_coe, fin.coe_eq_val, fin.coe_eq_val] at h_le,
-    exfalso,
-    exact not_le_of_lt h_lt (pred_le_pred h_le)
+    exact h_lt (mul_le_mul_left _ (nat.div_le_div_right h_le)),
   }
 end
 
-  -- This is the key relationship between the div_two and mul_two functions.
+  -- This is the key relationship between the div2 and bit0 functions.
 
-lemma fin_div_two_mul_two_related (x : fin (2*b + 2))
-  : x = x.div_two.mul_two ∨ x = (xor_one b x.div_two.mul_two) :=
+lemma fin_div2_bit0_related (x : fin (2*b))
+  : x.div2.bit0 = x ∨ x.div2.bit0.xor_one = x :=
 begin
-  rcases even_or_odd (x.val) with h | h,
-  { rcases h with ⟨k, hk⟩,
-    left, unfold fin.div_two fin.mul_two,
-    rw [fin.ext_iff, fin.coe_mk, fin.coe_mk, fin.coe_eq_val, hk],
-    simp,
-  },
-  { rcases h with ⟨k, hk⟩,
-    right, unfold xor_one fin.div_two fin.mul_two,
-    rw if_pos,
-    { dsimp, rw [fin.eq_iff_veq, fin.add_def, fin.val_one, hk, fin.mk_val,
-      fin.coe_eq_val, hk, add_comm,nat.add_div_of_dvd_left (dvd_mul_right 2 k),
-      nat.div_eq_of_lt (one_lt_two),zero_add, mul_div_right _ (zero_lt_two),
-      ← hk, mod_eq_of_lt x.property,hk, add_comm],
-    },
-    { dsimp, use (↑x / 2) }
-  }
+  rcases fin.even_or_odd x,
+  { left, assumption },
+  { right, rwa fin.bit0_xor_one_eq_bit1 }
 end
 
   /-
@@ -521,83 +510,105 @@ end
     make this easier, or even unnecessary.
   -/
 
-lemma xor_one_mod_two (x : fin (2*b + 2))
-  : (xor_one b x).mod_two = 1 + x.mod_two :=
+lemma xor_one_even_iff_not_even (x : fin (2*b))
+  : x.xor_one.even ↔ ¬ x.even :=
 begin
-  rw xor_one, unfold fin.mod_two, split_ifs, 
-  { rw [fin.eq_iff_veq, fin.mk_val, fin.add_def, fin.val_one, fin.mk_val, 
-    fin.coe_eq_val, fin.coe_eq_val, fin.add_def, fin.val_one, fiddly_even_mod h,
-    add_comm],
-    simp,
+  split; intro h,
+  { unfold fin.xor_one at h, split_ifs at h with h',
+    { exfalso,
+      rw fin.even_iff_not_odd at h,
+      exact h (fin.bit1_odd _)
+    },
+    { exact h' }
   },
-  { rcases (odd_iff_not_even.mpr h) with ⟨_, hk⟩,
-    rw [fin.eq_iff_veq, fin.mk_val, fin.add_def, fin.val_one, fin.mk_val,
-    fin.coe_eq_val, fin.coe_eq_val, fin.sub_def, fin.val_one, fiddly_odd_mod h,
-    hk, add_comm _ 1],
-    simp,
+  { unfold fin.xor_one,
+    rw if_neg h,
+    exact fin.bit0_even _,
+  }
+end
+
+lemma xor_one_odd_iff_not_odd (x : fin (2*b))
+  : x.xor_one.odd ↔ ¬ x.odd :=
+begin
+  rw [fin.odd_iff_not_even, not_iff_not, fin.odd_iff_not_even,
+  xor_one_even_iff_not_even]
+end
+
+lemma div2_bit0_eq_xor_of_odd {x : fin (2*b)}
+  : x.odd ↔ x.div2.bit0 = x.xor_one :=
+begin
+  split; intro h,
+  { unfold fin.xor_one,
+    rw fin.odd_iff_not_even at h,
+    rw if_neg h,
+  },
+  { cases fin.even_or_odd x with h' h',
+    { exfalso,
+      rw fin.even at h',
+      rw h' at h,
+      exact ne_xor_one _ h.symm,
+    },
+    { exact h' }
   }
 end
 
   -- This is the "floor" part of Theorem 3.1
 
-lemma xor_one_floor (x : fin (2*b + 2)) : (xor_one b x).div_two = x.div_two :=
+lemma xor_one_floor (x : fin (2*b)) : x.xor_one.div2 = x.div2 :=
 begin
-  unfold fin.div_two xor_one,
-  rw subtype.mk_eq_mk, split_ifs,
-  { rcases (id h) with ⟨k, hk⟩,
-    rw [fin.coe_eq_val, fin.coe_eq_val, fin.add_def, fin.val_one,
-    fiddly_even_mod h, hk, add_comm, nat.add_div_of_dvd_left
-    (dvd_mul_right 2 k), nat.div_eq_of_lt (one_lt_two), zero_add],
+  unfold fin.xor_one,
+  cases fin.even_or_odd x with h,
+  { rw if_pos h,
+    rw fin.bit1_div2_id,
   },
-  { rcases (odd_iff_not_even.mpr h) with ⟨k, hk⟩,
-    rw [fin.coe_eq_val, fin.coe_eq_val, fin.sub_def, fin.val_one,
-    fiddly_odd_mod h, hk, add_succ_sub_one, add_zero, add_comm,
-    nat.add_div_of_dvd_left (dvd_mul_right 2 k),
-    nat.div_eq_of_lt (one_lt_two), zero_add],
+  { rw fin.odd_iff_not_even at h,
+    rw if_neg h,
+    rw fin.bit0_div2_id,
   }
 end
 
   /-
     This defines the permutation represented by xor. We can view this as giving
-    for us that xor by one really is in {0, 1, .., 2b + 1}: the first part of
+    for us that xor by one really is in {0, 1, .., 2b}: the first part of
     Theorem 3.1.
   -/
 
-def xor_one_perm (b : ℕ) : perm (fin (2*b + 2)) :=
-  function.involutive.to_equiv (xor_one _) (xor_one_involutive _)
+def xor_one_perm {b : ℕ} : perm (fin (2*b)) :=
+  function.involutive.to_equiv (fin.xor_one) (xor_one_involutive)
 
   -- Lemma which shows that the permutation coerces to the function.
 
-lemma xor_one_perm_eq_xor_one : ⇑(xor_one_perm b) = xor_one b :=
+lemma xor_one_perm_eq_xor_one {b : ℕ} : ⇑(@xor_one_perm b) = fin.xor_one :=
 begin
-  ext, simp [xor_one_perm, xor_one],
+  ext, simp [xor_one_perm, fin.xor_one],
 end 
 
   /-
     Definition 3.2. 
   -/
 
-def Xif_s (s : fin (b + 1) → fin 2) (x : fin (2*b + 2)) : fin (2*b + 2)
-  := ite (s (x.div_two) = 1) (xor_one b x) x
+def Xif_s (s : fin b → bool) (x : fin (2*b)) : fin (2*b)
+  := cond (s (x.div2)) x.xor_one x
 
   -- Theorem 3.3. Easy after all the above!
 
-theorem Xif_s_involutive (s : fin (b + 1) → fin 2) : involutive (Xif_s s) := 
+theorem Xif_s_involutive (s : fin b → bool) : involutive (Xif_s s) := 
 begin
-  intros x, rw Xif_s, rw Xif_s, split_ifs with h h',
-  { apply xor_one_involutive },
-  { exfalso, rw (xor_one_floor x) at h', exact h' h },
-  { refl }
+  intros x,
+  unfold Xif_s,
+  cases (bool.dichotomy (s x.div2)) with h,
+  { rw [h, bool.cond_ff, h, bool.cond_ff] },
+  { rw [h, bool.cond_tt, xor_one_floor, h, bool.cond_tt, xor_one_involutive] }
 end
 
   -- Xif_s as a permutation.
 
-def Xif_s_perm (s : fin (b + 1) → fin 2) : perm (fin (2*b + 2)) :=
+def Xif_s_perm (s : fin b → bool) : perm (fin (2*b)) :=
   function.involutive.to_equiv (Xif_s s) (Xif_s_involutive s)
 
  -- Lemma which shows that the permutation coerces to the function.
  
-theorem coe_Xif_s_perm_eq_Xif_s (s : fin (b + 1) → fin 2)
+theorem coe_Xif_s_perm_eq_Xif_s (s : fin b → bool)
   : ⇑(Xif_s_perm s) = Xif_s s :=
 begin
   ext, simp [Xif_s_perm, Xif_s],
@@ -607,15 +618,15 @@ end part_three
 
 section part_four
 
-variables {b : ℕ} (π : perm ( fin (2*b + 2) )) (x : fin (2*b + 2)) (j k : ℤ)
+variables {b : ℕ} (π : perm ( fin (2*b) )) (x : fin (2*b)) (j k : ℤ)
 
   -- Definition 4.1
 
-def XbackXforth : fin (2*b + 2) → fin (2*b + 2) :=
-  π ∘ (xor_one b) ∘ ⇑(π⁻¹) ∘ (xor_one b)
+def XbackXforth : fin (2*b) → fin (2*b) :=
+  π ∘ fin.xor_one ∘ ⇑(π⁻¹) ∘ fin.xor_one
 
-def XbackXforth_inv : fin (2*b + 2) → fin (2*b + 2) :=
-  (xor_one b) ∘ π ∘ (xor_one b) ∘ ⇑(π⁻¹) 
+def XbackXforth_inv : fin (2*b) → fin (2*b) :=
+  fin.xor_one ∘ π ∘ fin.xor_one ∘ ⇑(π⁻¹) 
 
 lemma XbackXforth_inv_left_inv
   : function.left_inverse (XbackXforth_inv π) (XbackXforth π) :=
@@ -634,7 +645,7 @@ end
 
   -- Theorem 4.2, which constructs the corresponding permutation.
 
-def XbackXforth_perm : perm ( fin (2*b + 2) ) :=
+def XbackXforth_perm : perm ( fin (2*b) ) :=
   ⟨_, _, XbackXforth_inv_left_inv π, XbackXforth_inv_right_inv π⟩
 
  -- Simp lemma which shows that the permutation coerces to the function.
@@ -650,9 +661,9 @@ lemma ex_kay_plus_one: (((XbackXforth_perm π) ^ (k + 1)) x) =
   (by {repeat {rw ex_kay}, rw [← gpow_one (XbackXforth_perm π),
       gpow_add, mul_apply, equiv.perm.gpow_apply_comm, gpow_one]} )
 
-lemma XbackXforth_pow_pow_step_up : (XbackXforth_perm π) ( (xor_one_perm b)
+lemma XbackXforth_pow_pow_step_up : (XbackXforth_perm π) ( (xor_one_perm)
   (((XbackXforth_perm π) ^ (k + 1)) x) ) =
-    (xor_one_perm b) (((XbackXforth_perm π) ^ k) x) :=
+    (xor_one_perm) (((XbackXforth_perm π) ^ k) x) :=
 begin
   rw [ex_kay_plus_one, XbackXforth_perm, equiv.coe_fn_mk,
   xor_one_perm_eq_xor_one],
@@ -661,9 +672,9 @@ begin
   equiv.perm.apply_inv_self],
 end
 
-lemma XbackXforth_pow_pow_step_down : (XbackXforth_perm π)⁻¹ ( (xor_one_perm b)
+lemma XbackXforth_pow_pow_step_down : (XbackXforth_perm π)⁻¹ ( (xor_one_perm)
   (((XbackXforth_perm π) ^ k) x) ) =
-    (xor_one_perm b) (((XbackXforth_perm π) ^ (k + 1)) x) :=
+    (xor_one_perm) (((XbackXforth_perm π) ^ (k + 1)) x) :=
 begin
   rw equiv.perm.inv_def, rw [ex_kay_plus_one, XbackXforth_perm, equiv.coe_fn_mk,
   xor_one_perm_eq_xor_one],
@@ -673,8 +684,8 @@ end
   -- Part one of Theorem 4.3
 
 theorem XbackXforth_pow_pow :
-  ( (XbackXforth_perm π) ^ k) ((xor_one_perm b)
-     (((XbackXforth_perm π) ^ k) x)) = (xor_one_perm b) x := 
+  ( (XbackXforth_perm π) ^ k) ((xor_one_perm)
+     (((XbackXforth_perm π) ^ k) x)) = (xor_one_perm) x := 
 begin
   cases k,
   { rw int.of_nat_eq_coe, induction k with k hk,
@@ -733,19 +744,19 @@ end
   -- Part 2 of Theorem 4.3
 
 theorem ex_jay_neq_xor_one_ex_kay :
-  ∀ j k : ℤ, (((XbackXforth_perm π) ^ j) x) ≠ (xor_one_perm b)
+  ∀ j k : ℤ, (((XbackXforth_perm π) ^ j) x) ≠ (xor_one_perm)
     (((XbackXforth_perm π) ^ k) x) :=
 begin
   rintro j' k' hjk',
-  have p_symm : ∀ j k : ℤ, (XbackXforth_perm π ^ j) x = (xor_one_perm b)
+  have p_symm : ∀ j k : ℤ, (XbackXforth_perm π ^ j) x = (xor_one_perm)
     ((XbackXforth_perm π ^ k) x)
-      → (XbackXforth_perm π ^ k) x = (xor_one_perm b)
+      → (XbackXforth_perm π ^ k) x = (xor_one_perm)
         ((XbackXforth_perm π ^ j) x),
   { intros _ _,
     { intro h,
       rw xor_one_perm_eq_xor_one at h ⊢,
-      apply (xor_one_involutive b).injective,
-      rw [(xor_one_involutive b), h],
+      apply (xor_one_involutive).injective,
+      rw [(xor_one_involutive), h],
     },
   },
   rcases (min_prop_pairs p_symm ⟨_, _, hjk'⟩) with ⟨j, k, j_le_k, hjk, min_jk⟩,
@@ -766,32 +777,32 @@ begin
   rcases (ge_add_two_or_succ_or_eq_of_le  _ _ j_le_k)
     with rfl | rfl | j_add_two_le_k,
   { rw (xor_one_perm_eq_xor_one) at hjk,
-    exact (ne_xor_one _ hjk),
+    exact (ne_xor_one _ hjk.symm),
   },
   { refine ne_xor_one (π⁻¹ ((XbackXforth_perm π ^ (1 + j)) x)) _,
     conv begin
       congr,
+      { rw [← xor_one_perm_eq_xor_one, ← trans_apply _ (xor_one_perm),
+        equiv.coe_trans]
+      },
       { rw [gpow_add, gpow_one, equiv.perm.coe_mul, ← equiv.coe_trans,
         trans_apply,
         hjk, ← add_comm (1 : ℤ), ← trans_apply, equiv.coe_trans,
         ← equiv.coe_trans (XbackXforth_perm π),
-        ← trans_apply (xor_one_perm b), equiv.coe_trans, equiv.coe_trans],
-      },
-      { rw [← xor_one_perm_eq_xor_one, ← trans_apply _ (xor_one_perm b),
-        equiv.coe_trans]
+        ← trans_apply (xor_one_perm), equiv.coe_trans, equiv.coe_trans],
       },
     end,
     apply (congr _ (eq.refl _)),
     rw [coe_XbackXforth_perm_eq_XbackXforth, xor_one_perm_eq_xor_one,
     XbackXforth],
     conv begin
-      to_lhs,
-      rw [← comp.assoc _ _ (xor_one b ∘ ⇑π⁻¹ ∘ xor_one b), comp.assoc],
+      to_rhs,
+      rw [← comp.assoc _ _ (fin.xor_one ∘ ⇑π⁻¹ ∘ fin.xor_one), comp.assoc],
       congr,
       { rw [ ← equiv.perm.coe_mul, mul_left_inv, equiv.perm.coe_one] },
-      { rw comp.assoc _ _ (xor_one b),
+      { rw comp.assoc _ _ fin.xor_one,
         congr, skip, rw comp.assoc,
-        congr, skip, rw function.involutive.comp_self (xor_one_involutive b)
+        congr, skip, rw function.involutive.comp_self (xor_one_involutive)
       }
     end,
     rw [comp.right_id, comp.left_id]
@@ -806,10 +817,10 @@ end
   -- Part 3 of Theorem 4.3
 
 theorem cycle_size_bound :
-  (of_fintype (cycle (XbackXforth_perm π) x)).to_finset.card ≤ b + 1 :=
+  (of_fintype (cycle (XbackXforth_perm π) x)).to_finset.card ≤ b :=
 begin
   let s_0 := (of_fintype (cycle (XbackXforth_perm π) x)).to_finset,
-  let s_1 := finset.image (xor_one_perm b) s_0,
+  let s_1 := finset.image (xor_one_perm) s_0,
   have union_bound := le_trans (finset.card_le_univ (s_0 ∪ s_1))
       (le_of_eq (fintype.card_fin _)),
   have disj : disjoint s_0 s_1, 
@@ -819,23 +830,21 @@ begin
   },
   have card_equal : s_1.card = s_0.card :=
     finset.card_image_of_inj_on (function.injective.inj_on
-      (function.involutive.injective (xor_one_involutive _)) _),
+      (function.involutive.injective (xor_one_involutive)) _),
   rw [finset.card_union_eq disj, card_equal, ← two_mul s_0.card] at union_bound,
-  conv at union_bound begin to_rhs, congr, skip, rw ← mul_one 2, end,
-  conv at union_bound begin to_rhs, rw ← mul_add, end,
   exact (mul_le_mul_left (zero_lt_two)).mp union_bound,
 end
 
   -- Theorem 4.4
 
 theorem cyclemin_xor_one_commutes :
-  function.commute (cyclemin (XbackXforth_perm π)) (xor_one b) := 
+  function.commute (cyclemin (XbackXforth_perm π)) fin.xor_one := 
 begin
   intros x,
   rcases (set.is_wf.min_mem (wo_set_is_wf _)
     (cycle_nonempty (XbackXforth_perm π) x)) with ⟨j, hj⟩,
   rcases (set.is_wf.min_mem (wo_set_is_wf _)
-    (cycle_nonempty (XbackXforth_perm π) (xor_one b x))) with ⟨k, hk⟩,
+    (cycle_nonempty (XbackXforth_perm π) (x.xor_one))) with ⟨k, hk⟩,
   apply le_antisymm,
   { apply cyclemin_le,
     rw cyclemin,
@@ -847,8 +856,8 @@ begin
   { 
     rw [cyclemin, cyclemin, ← hk, ← hj],
     by_contradiction, push_neg at h,
-    have k_xor_eq_xor_minus_k : (XbackXforth_perm π ^ k) (xor_one b x)
-      = (xor_one b) ((XbackXforth_perm π ^ -k) x),
+    have k_xor_eq_xor_minus_k : (XbackXforth_perm π ^ k) (x.xor_one)
+      = fin.xor_one ((XbackXforth_perm π ^ -k) x),
     { apply equiv.injective ((XbackXforth_perm π) ^ - k),
       rw [← xor_one_perm_eq_xor_one, XbackXforth_pow_pow],
       simp only [equiv.apply_eq_iff_eq, gpow_neg, equiv.perm.inv_apply_self],
@@ -868,8 +877,8 @@ end
 end part_four
 
 section part_five
-variables {b : ℕ} (π : perm ( fin (2*b + 2) ))
-variables (x : fin (2*b + 2)) (s : fin (b + 1) → fin 2) 
+variables {b : ℕ} (π : perm ( fin (2*b) ))
+variables (x : fin (2*b)) (y : fin b) (s : fin b → fin 2) 
 
   /-
     Note that all of these definitions (from Definition 5.1) will be
@@ -877,105 +886,128 @@ variables (x : fin (2*b + 2)) (s : fin (b + 1) → fin 2)
     Theorem 4.3 to get round this...
   -/
 
-noncomputable def firstcontrol : fin (b + 1) → fin 2 :=
-  fin.mod_two ∘ (cyclemin (XbackXforth_perm π)) ∘ fin.mul_two
+noncomputable def firstcontrol : bool :=
+  to_bool ( (cyclemin (XbackXforth_perm π)) y.bit0).odd
 
-noncomputable def F_perm : perm ( fin (2*b + 2) ) := Xif_s_perm (firstcontrol π)
+noncomputable def F_perm
+  : perm ( fin (2*b) ) := Xif_s_perm (firstcontrol π)
 
-noncomputable def lastcontrol : fin (b + 1) → fin 2 :=
-  fin.mod_two ∘ (F_perm π) ∘ π ∘ fin.mul_two
+noncomputable def lastcontrol : bool :=
+  to_bool ( (F_perm π) (π (y.bit0)) ).odd
 
-noncomputable def L_perm : perm ( fin (2*b + 2) ) := Xif_s_perm (lastcontrol π)
+noncomputable def L_perm 
+  : perm ( fin (2*b) ) := Xif_s_perm (lastcontrol π)
 
-noncomputable def middleperm : fin (2*b + 2) → fin (2*b + 2) :=
-  (F_perm π) ∘ π ∘ (L_perm π)
+noncomputable def middleperm 
+  : fin (2*b) → fin (2*b) := (F_perm π) ∘ π ∘ (L_perm π)
 
   -- Theorem 5.2
 
-theorem firstcontrol_zero_eq_zero : (firstcontrol π) 0 = 0 :=
+/-
+theorem firstcontrol_zero_eq_zero
+  (π : perm ( fin (2*b.succ) )) : (firstcontrol π) 0 = ff :=
 begin
-  rw firstcontrol, rw comp_apply, rw comp_apply,
-  rw fin.mul_two, simp only [fin.mul_two, fin.mk_zero, fin.coe_zero, mul_zero],
+  rw firstcontrol, apply to_bool_ff, rw comp_apply, rw comp_apply,
+  have qq : (0 : fin b.succ).bit0 = 0, sorry,
+  rw qq,
   have q : cyclemin (XbackXforth_perm π) 0 = 0,
   { rw cyclemin, apply le_antisymm,
     { apply set.is_wf.min_le,
       use 0, simp only [id.def, gpow_zero, equiv.perm.coe_one],
     },
-    { exact nat.zero_le _ }
+    { rw set.is_wf.le_min_iff,
+      intros _ _,
+      refine fin.zero_le _, }
   },
   rw q, rw fin.mod_two, simp only [fin.mk_zero, fin.coe_zero, nat.zero_mod],
 end
-
+-/
   -- Theorem 5.3
 
-theorem F_perm_eq_cyclemin_upto_parity :
-  fin.mod_two ∘ (F_perm π) = fin.mod_two ∘ (cyclemin (XbackXforth_perm π)) :=
+theorem F_even_iff_cyclemin_even :
+  (F_perm π x).even ↔ (cyclemin (XbackXforth_perm π) x).even :=
 begin
-  ext1 x,
-  rcases (fin_div_two_mul_two_related x) with x_eq | x_eq,
-  { rw [comp_apply, comp_apply,
-    F_perm, coe_Xif_s_perm_eq_Xif_s, Xif_s],
-    split_ifs with h, 
-    { rw [firstcontrol, comp_apply, comp_apply] at h,
-      rw [x_eq, h, xor_one_mod_two, mul_two_mod_two_eq_zero, add_zero]
+  cases (fin.even_or_odd x) with h,
+  { rw [F_perm, coe_Xif_s_perm_eq_Xif_s, Xif_s, firstcontrol],
+    rw bool.cond_to_bool,
+    rw fin.even at h,
+    rw h, split_ifs with h',
+    { rw xor_one_even_iff_not_even,
+      rw fin.odd_iff_not_even at h',
+      rw not_iff_comm,
+      exact ⟨λ _, h, λ _, h'⟩
     },
-    { rw [fin_two_not_one_iff_zero, firstcontrol, comp_apply,
-      comp_apply, ← x_eq] at h,
-      rw [h, x_eq, mul_two_mod_two_eq_zero]
+    { rw ← fin.even_iff_not_odd at h',
+      exact ⟨λ _, h', λ _, h⟩
     }
   },
-  { rw [comp_apply, comp_apply, x_eq, cyclemin_xor_one_commutes,
-    F_perm, coe_Xif_s_perm_eq_Xif_s, Xif_s],
-    split_ifs with h,
-    { rw [firstcontrol, comp_apply, comp_apply, ← x_eq] at h,
-      rw [xor_one_involutive, mul_two_mod_two_eq_zero, xor_one_mod_two, h,
-      fin.eq_iff_veq, fin.add_def, fin.val_zero', fin.val_one, nat.mod_self],
+  { rw [F_perm, coe_Xif_s_perm_eq_Xif_s, Xif_s, firstcontrol],
+    rw bool.cond_to_bool,
+    rw fin.odd at h,
+    rw div2_bit0_eq_xor_of_odd.mp h,
+    rw cyclemin_xor_one_commutes,
+    split_ifs with h',
+    { rw [xor_one_odd_iff_not_odd, ← fin.even_iff_not_odd] at h',
+      rw [xor_one_even_iff_not_even, ← fin.odd_iff_not_even],
+      exact ⟨λ _, h', λ _, h⟩
     },
-    { rw [fin_two_not_one_iff_zero, firstcontrol, comp_apply,
-      comp_apply, ← x_eq] at h,
-      rw [xor_one_mod_two, xor_one_mod_two, mul_two_mod_two_eq_zero, h],
+    { rw [← fin.even_iff_not_odd, xor_one_even_iff_not_even,
+      ← fin.odd_iff_not_even] at h',
+      rw fin.even_iff_not_odd,
+      rw fin.even_iff_not_odd,
+      rw not_iff_not,
+      exact ⟨λ _, h', λ _, h⟩
     }
   }
 end
 
   -- Theorem 5.4
 
-theorem L_perm_eq_F_π_perm_upto_parity :
-  fin.mod_two ∘ (L_perm π) = fin.mod_two ∘ (F_perm π) ∘ π :=
+theorem L_even_iff_F_π_even :
+  (L_perm π x).even ↔ (F_perm π (π x)).even :=
 begin
-  ext1 x,
-  rcases (fin_div_two_mul_two_related x) with x_eq | x_eq,
-  { rw [L_perm, lastcontrol, coe_Xif_s_perm_eq_Xif_s, 
-    comp_apply, comp_apply, comp_apply, Xif_s], split_ifs,
-    { rw [comp_apply, ← comp.assoc, comp_apply, ← x_eq, comp_apply] at h,
-      rw [xor_one_mod_two, h, x_eq, mul_two_mod_two_eq_zero, add_zero],
+  cases (fin.even_or_odd x) with h,
+  { unfold L_perm,
+    unfold fin.even at h,
+    rw coe_Xif_s_perm_eq_Xif_s, rw Xif_s,
+    rw lastcontrol,
+    rw bool.cond_to_bool, split_ifs with h',
+    { rw xor_one_even_iff_not_even,
+      rw [h, fin.odd_iff_not_even] at h',
+      rw not_iff_comm,
+      exact ⟨λ _, h, λ _, h'⟩
     },
-    { rw [fin_two_not_one_iff_zero, ← comp.assoc, ← comp.assoc, comp_apply,
-      ← x_eq, comp_apply, comp_apply] at h,
-      rw [h, x_eq, mul_two_mod_two_eq_zero],
+    { rw [h, ← fin.even_iff_not_odd] at h',
+      exact ⟨λ _, h', λ _, h⟩
     }
   },
-  { have bydef : (XbackXforth_perm π) ((xor_one b) (π ((xor_one b) x))) = (π x),
+  { have by_def : (XbackXforth_perm π) ((π (x.xor_one)).xor_one) = (π x),
     { rw [coe_XbackXforth_perm_eq_XbackXforth, XbackXforth, function.comp_app,
       function.comp_app, function.comp_app, xor_one_involutive,
       equiv.perm.inv_apply_self, xor_one_involutive],
     },
-    rw [← comp.assoc _ _ π, F_perm_eq_cyclemin_upto_parity, comp.assoc _ _ π,
-    comp_apply, comp_apply, comp_apply, ← bydef, cyclemin_invariant_pi,
-    cyclemin_xor_one_commutes, L_perm, lastcontrol, coe_Xif_s_perm_eq_Xif_s, 
-    Xif_s], split_ifs,
-    { rw [← comp.assoc _ (F_perm π) _, F_perm_eq_cyclemin_upto_parity,
-      comp_apply, comp_apply, comp_apply] at h,
-      rw [x_eq, xor_one_involutive, xor_one_mod_two, h, mul_two_mod_two_eq_zero,
-      fin.eq_iff_veq, fin.add_def, fin.val_zero', fin.val_one, nat.mod_self],
+    unfold L_perm,
+    rw coe_Xif_s_perm_eq_Xif_s, rw Xif_s,
+    unfold lastcontrol,
+    rw bool.cond_to_bool,
+    rw div2_bit0_eq_xor_of_odd.mp h,
+    rw F_even_iff_cyclemin_even,
+    rw ← by_def,
+    rw cyclemin_invariant_pi,
+    rw cyclemin_xor_one_commutes,
+    rw xor_one_even_iff_not_even,
+    split_ifs with h',
+    { rw [fin.odd_iff_not_even, F_even_iff_cyclemin_even] at h',
+      rw xor_one_even_iff_not_even,
+      rw ← fin.odd_iff_not_even,
+      exact ⟨λ _, h', λ _, h⟩
     },
-    { rw [fin_two_not_one_iff_zero, ← comp.assoc _ (F_perm π) _,
-      F_perm_eq_cyclemin_upto_parity,
-      comp_apply, comp_apply, comp_apply] at h,
-      rw [x_eq, xor_one_mod_two, xor_one_mod_two, mul_two_mod_two_eq_zero,
-      xor_one_involutive, h] 
+    { rw [ ← fin.even_iff_not_odd, F_even_iff_cyclemin_even] at h',
+      rw fin.even_iff_not_odd,
+      rw not_iff_not,
+      exact ⟨λ _, h', λ _, h⟩
     }
-  },
+  }
 end
 
   /-
@@ -983,7 +1015,7 @@ end
     for part one of Theorem 5.5.
   -/
 
-noncomputable def middleperm_perm : perm ( fin (2*b + 2) )
+noncomputable def middleperm_perm : perm ( fin (2*b) )
   := (F_perm π) * π * (L_perm π)
 
 theorem coe_middleperm_perm_eq_middleperm
@@ -993,88 +1025,171 @@ theorem coe_middleperm_perm_eq_middleperm
 
   -- We show middleperm preserves parity for the second part of Theorem 5.5.
 
-theorem middleperm_preserves_parity
-  : fin.mod_two ∘ (middleperm_perm π) = fin.mod_two :=
+theorem middleperm_even_iff_even
+  : (middleperm_perm π x).even = x.even :=
 begin
-  rw coe_middleperm_perm_eq_middleperm, rw middleperm,
-  rw ← comp.assoc, rw ← comp.assoc, rw comp.assoc _ _ π,
-  rw ← L_perm_eq_F_π_perm_upto_parity, rw comp.assoc,
-  rw L_perm, rw function.involutive.comp_self,
-  { rw right_id },
-  { rw coe_Xif_s_perm_eq_Xif_s, apply Xif_s_involutive }
+  rw [coe_middleperm_perm_eq_middleperm, middleperm, comp_app, comp_app, 
+  ← L_even_iff_F_π_even, L_perm, coe_Xif_s_perm_eq_Xif_s,
+  Xif_s_involutive]
 end
 
   -- Under suitable conditions, we have computable versions of all the above.
 
-def fast_firstcontrol (i : ℕ) (π : perm (fin (2*b + 2)))
-  : fin (b + 1) → fin 2 :=
-    fin.mod_two ∘ (fast_cyclemin i (XbackXforth_perm π)) ∘ fin.mul_two
+def fast_firstcontrol (i : ℕ) (π : perm (fin (2*b))) (y : fin b) : bool :=
+  to_bool ( (fast_cyclemin i (XbackXforth_perm π)) y.bit0).odd  
 
-def fast_F_perm (i : ℕ) (π : perm (fin (2*b + 2))) : perm (fin (2*b + 2))
+def fast_F_perm (i : ℕ) (π : perm (fin (2*b))) : perm (fin (2*b))
   := Xif_s_perm (fast_firstcontrol i π)
 
-def fast_lastcontrol (i : ℕ) (π : perm (fin (2*b + 2)))
-  : fin (b + 1) → fin 2 :=
-    fin.mod_two ∘ (fast_F_perm i π) ∘ π ∘ fin.mul_two
+def fast_lastcontrol (i : ℕ) (π : perm (fin (2*b))) (y : fin b) : bool :=
+  to_bool ( (fast_F_perm i π) (π (y.bit0)) ).odd
 
-def fast_L_perm (i : ℕ) (π : perm (fin (2*b + 2))) : perm (fin (2*b + 2))
+
+def fast_L_perm (i : ℕ) (π : perm (fin (2*b))) : perm (fin (2*b))
   := Xif_s_perm (fast_lastcontrol i π)
 
-def fast_middleperm (i : ℕ) (π : perm (fin (2*b + 2)))
-  : fin (2*b + 2) → fin (2*b + 2)
+def fast_middleperm (i : ℕ) (π : perm (fin (2*b)))
+  : fin (2*b) → fin (2*b)
     := (fast_F_perm i π) ∘ π ∘ (fast_L_perm i π)
 
-def fast_middleperm_perm (i : ℕ) (π : perm (fin (2*b + 2)))
-  : perm (fin (2*b + 2)) :=
+def fast_middleperm_perm (i : ℕ) (π : perm (fin (2*b)))
+  : perm (fin (2*b)) :=
   (fast_F_perm i π) * π * (fast_L_perm i π)
 
 @[simp]
-theorem fast_firstcontrol_eq_firstcontrol {i : ℕ} (h : b + 1 ≤ 2^i)
+theorem fast_firstcontrol_eq_firstcontrol {i : ℕ} (h : b ≤ 2^i)
   : fast_firstcontrol i π = firstcontrol π := 
 begin
   ext1 y, simp [fast_firstcontrol, firstcontrol], 
-  rw fast_cyclemin_eq_cyclemin y.mul_two
-  (le_trans (cycle_size_bound π (fin.mul_two y)) h) 
+  rw fast_cyclemin_eq_cyclemin y.bit0 (le_trans (cycle_size_bound π (fin.bit0 y)) h)
 end
 
 @[simp]
-theorem fast_F_perm_eq_F_perm {i : ℕ} (h : b + 1 ≤ 2^i)
+theorem fast_F_perm_eq_F_perm {i : ℕ} (h : b ≤ 2^i)
   : fast_F_perm i π = F_perm π
     := (by {ext, simp [h, fast_F_perm, F_perm, Xif_s]} )
 
 @[simp]
-theorem fast_lastcontrol_eq_lastcontrol {i : ℕ} (h : b + 1 ≤ 2^i)
+theorem fast_lastcontrol_eq_lastcontrol {i : ℕ} (h : b ≤ 2^i)
   : fast_lastcontrol i π = lastcontrol π
     := (by {ext, simp [h, fast_lastcontrol, lastcontrol]} )
 
 @[simp]
-theorem fast_L_perm_eq_L_perm {i : ℕ} (h : b + 1 ≤ 2^i)
+theorem fast_L_perm_eq_L_perm {i : ℕ} (h : b ≤ 2^i)
   : fast_L_perm i π = L_perm π
     := (by {ext, simp [h, fast_L_perm, L_perm, Xif_s]} )
 
 
 @[simp]
-theorem fast_middleperm_eq_middleperm {i : ℕ} (h : b + 1 ≤ 2^i)
+theorem fast_middleperm_eq_middleperm {i : ℕ} (h : b ≤ 2^i)
   : fast_middleperm i π = middleperm π
     := (by {ext, simp [h, fast_middleperm, middleperm]} )
 
-def π_even : fin (b + 1) -> fin (b + 1) :=
-  fin.div_two ∘ π ∘ fin.mul_two
+def π_even : fin b -> fin b :=
+  fin.div2 ∘ π ∘ fin.bit0
 
-def π_odd : fin (b + 1) -> fin (b + 1) :=
-  fin.div_two ∘ π ∘ (xor_one b) ∘ fin.mul_two
+def π_odd : fin b -> fin b :=
+  fin.div2 ∘ π ∘ fin.xor_one ∘ fin.bit0
 
-def π_even_inv : fin (b + 1) -> fin (b + 1) :=
-  fin.div_two ∘ (xor_one b) ∘ ⇑(π⁻¹) ∘ fin.mul_two
+def π_even_inv : fin b -> fin b :=
+  fin.div2 ∘ fin.xor_one ∘ ⇑(π⁻¹) ∘ fin.bit0
 
-def π_odd_inv : fin (b + 1) -> fin (b + 1) :=
-  fin.div_two ∘ ⇑(π⁻¹) ∘ fin.mul_two
+def π_odd_inv : fin b -> fin b :=
+  fin.div2 ∘ ⇑(π⁻¹) ∘ fin.bit0
 
-theorem π_even_left_inverse (h : fin.mod_two ∘ π = fin.mod_two)
-  : function.left_inverse (π_even_inv π) (π_even π) :=
+def even_perm_to_fun {μ : perm (fin (2*b))} (h : ∀ x, (μ x).even ↔ x.even ) :
+  fin b → fin b := λ y, (μ (y.bit0)).div2
+
+def even_perm_inv_fun {μ : perm (fin (2*b))} (h : ∀ x, (μ x).even ↔ x.even ) :
+  fin b → fin b := λ y, (μ⁻¹ (y.bit0)).div2
+
+lemma even_perm_left_inv
+  {μ : perm (fin (2*b))} {h : ∀ x, (μ x).even ↔ x.even } :
+    function.left_inverse (even_perm_inv_fun h) (even_perm_to_fun h) :=
 begin
-  intro x, unfold π_even π_even_inv, sorry
+  intros y,
+  unfold even_perm_to_fun,
+  unfold even_perm_inv_fun,
+  have hμy := (h _).mpr (fin.bit0_even y),
+  rw fin.even at hμy,
+  rw hμy,
+  rw inv_apply_self,
+  exact fin.bit0_div2_id
 end
+
+lemma even_perm_right_inv
+  {μ : perm (fin (2*b))} {h : ∀ x, (μ x).even ↔ x.even } :
+    function.right_inverse (even_perm_inv_fun h) (even_perm_to_fun h) :=
+begin
+  intros y,
+  unfold even_perm_to_fun,
+  unfold even_perm_inv_fun,
+  have hμy := (h (μ⁻¹ y.bit0)).mp,
+  rw apply_inv_self at hμy,
+  specialize hμy (fin.bit0_even y),
+  rw fin.even at hμy,
+  rw hμy,
+  rw apply_inv_self,
+  exact fin.bit0_div2_id
+end
+
+def even_perm {μ : perm (fin (2*b))} (h : ∀ x, (μ x).even ↔ x.even ) :
+  perm (fin b) := { to_fun := even_perm_to_fun h,
+                    inv_fun := even_perm_inv_fun h,
+                    left_inv := even_perm_left_inv,
+                    right_inv := even_perm_right_inv
+                  }
+
+def odd_perm_to_fun {μ : perm (fin (2*b))} (h : ∀ x, (μ x).even ↔ x.even ) :
+  fin b → fin b := λ y, (μ (y.bit1)).div2
+
+def odd_perm_inv_fun {μ : perm (fin (2*b))} (h : ∀ x, (μ x).even ↔ x.even ) :
+  fin b → fin b := λ y, (μ⁻¹ (y.bit1)).div2
+
+lemma odd_perm_left_inv
+  {μ : perm (fin (2*b))} {h : ∀ x, (μ x).even ↔ x.even } :
+    function.left_inverse (odd_perm_inv_fun h) (odd_perm_to_fun h) :=
+begin
+  intros y,
+  unfold odd_perm_to_fun,
+  unfold odd_perm_inv_fun,
+  simp_rw [fin.even_iff_not_odd, not_iff_not] at h,
+  have hμy := (h _).mpr (fin.bit1_odd y),
+  rw fin.odd at hμy,
+  rw hμy,
+  rw inv_apply_self,
+  exact fin.bit1_div2_id
+end
+
+lemma odd_perm_right_inv
+  {μ : perm (fin (2*b))} {h : ∀ x, (μ x).even ↔ x.even } :
+    function.right_inverse (odd_perm_inv_fun h) (odd_perm_to_fun h) :=
+begin
+  intros y,
+  unfold odd_perm_to_fun,
+  unfold odd_perm_inv_fun,
+  simp_rw [fin.even_iff_not_odd, not_iff_not] at h,
+  have hμy := (h (μ⁻¹ y.bit1)).mp,
+  rw apply_inv_self at hμy,
+  specialize hμy (fin.bit1_odd y),
+  rw fin.odd at hμy,
+  rw hμy,
+  rw apply_inv_self,
+  exact fin.bit1_div2_id
+end
+
+def odd_perm {μ : perm (fin (2*b))} (h : ∀ x, (μ x).even ↔ x.even ) :
+  perm (fin b) := { to_fun := odd_perm_to_fun h,
+                    inv_fun := odd_perm_inv_fun h,
+                    left_inv := odd_perm_left_inv,
+                    right_inv := odd_perm_right_inv
+                  }
+
+def perm_list_to_fun (l : list (fin (2*b))) (h : l ~ list.fin_range (2*b) )
+  : fin (2*b) → fin (2*b) :=
+    λ x, list.nth_le l x.val (lt_of_lt_of_le x.property
+      (le_of_eq (eq.trans ((list.length_fin_range (2*b)).symm)
+        h.length_eq.symm )))
 
 end part_five
 
