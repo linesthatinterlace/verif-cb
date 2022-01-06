@@ -1,0 +1,8 @@
+[package]
+name = "verif-cb"
+version = "0.1"
+lean_version = "leanprover-community/lean:3.28.0"
+path = "src"
+
+[dependencies]
+mathlib = {git = "https://github.com/leanprover-community/mathlib", rev = "5258669e19c3a0321c4909366909ad2c735518e5"}
